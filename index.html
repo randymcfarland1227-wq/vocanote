@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vocanote</title>
+<meta name="description" content="Write lyrics on the beat. Drop in an Ableton set, MIDI or audio and place every syllable against the track.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23121117'/%3E%3Ccircle cx='10' cy='12' r='5' fill='%236cb6ff'/%3E%3Crect x='18' y='7' width='9' height='9' rx='2' fill='%23f5c518'/%3E%3Cpath d='M5 24h22' stroke='%23f1ede4' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <button id="sideBtn" class="ib" title="Show or hide the panel" aria-label="Toggle panel">☰</button>
+    <div class="logo"><span class="lg-c"></span><span class="lg-s"></span>vocanote</div>
+    <div id="fname" title=""></div>
+    <div class="transport">
+      <button id="play" class="pb" title="Play / pause (Space)" aria-label="Play">▶</button>
+      <button id="loop" class="tb" title="Loop the line or section you are working on (L)">Loop: off</button>
+      <div id="clock">Bar 1 · 0:00.00</div>
+      <input id="vol" type="range" min="0" max="1" step="0.01" value="0.8" title="Volume" aria-label="Volume">
+    </div>
+    <div class="actions">
+      <button id="undo" class="tb" title="Undo (⌘Z)">Undo</button>
+      <button id="sheetBtn" class="tb" title="See the lyrics as plain text">Lyric sheet</button>
+      <button id="openBtn" class="tb pri">Open file</button>
+      <button id="moreBtn" class="ib" title="More" aria-label="More">⋯</button>
+    </div>
+  </header>
+
+  <aside id="side">
+    <section>
+      <h3>View</h3>
+      <div id="grid" class="chips"></div>
+      <label class="rowl">Bars per line
+        <span class="step"><button data-bars="-1" aria-label="Fewer bars per line">−</button><b id="barsN">2</b><button data-bars="1" aria-label="More bars per line">+</button></span>
+      </label>
+    </section>
+    <section>
+      <h3>Elements</h3>
+      <div id="els"></div>
+    </section>
+    <section>
+      <h3>Lyrics</h3>
+      <label class="rowl">Space jumps to <select id="follow"></select></label>
+      <label class="rowl chk"><input type="checkbox" id="guide"> Play my melody notes</label>
+    </section>
+    <section>
+      <h3>Sections</h3>
+      <div id="secAdd" class="chips sm"></div>
+      <div class="hint" id="secHint"></div>
+      <div id="secList"></div>
+    </section>
+    <section>
+      <h3>Tempo</h3>
+      <label class="rowl">BPM <span><input id="bpm" type="number" min="30" max="300" step="0.5"><button id="tap" class="mini">Tap</button></span></label>
+      <div id="offBox">
+        <label class="rowl">Beat 1 at (sec) <input id="off" type="number" step="0.01"></label>
+        <div class="chips sm"><button id="offHere">Beat 1 = playhead</button><button id="offM">− beat</button><button id="offP">+ beat</button></div>
+      </div>
+    </section>
+    <details>
+      <summary>Keys</summary>
+      <ul class="keys">
+        <li><kbd>Space</kbd> next spot (or play when not typing)</li>
+        <li><kbd>-</kbd> split a word: talk-ing</li>
+        <li><kbd>-</kbd> on an empty spot = silence</li>
+        <li><kbd>↑</kbd> <kbd>↓</kbd> set the note (<kbd>⌥</kbd> octave)</li>
+        <li><kbd>⇧→</kbd> <kbd>⇧←</kbd> hold the word longer / shorter</li>
+        <li><kbd>Enter</kbd> push the rest onto a new line</li>
+        <li><kbd>⌫</kbd> on an empty spot goes back</li>
+        <li><kbd>⌘Enter</kbd> play / pause while typing</li>
+        <li><kbd>⌥</kbd> drag = free placement</li>
+        <li>Right-click a line for sections</li>
+      </ul>
+    </details>
+  </aside>
+
+  <main id="stage">
+    <div id="sticky">
+      <div id="wavewrap"><div id="wlab">Waveform</div><canvas id="wave"></canvas><div id="wph"></div></div>
+      <div id="mini"></div>
+    </div>
+    <div id="rows"><div id="rowlist"></div><div id="ph"></div><input id="lyin" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Lyric"></div>
+    <div id="empty">
+      <div class="drop">
+        <div class="big">Drop your track here</div>
+        <p>An Ableton Live set (<b>.als</b>), a MIDI file (<b>.mid</b>) or audio (<b>mp3 / wav</b>).<br>Add the bounce on top of a set to hear the real mix.</p>
+        <div class="chips"><button id="pick" class="pri">Choose a file</button><button id="demo">Try the demo</button></div>
+        <p class="fine">Files stay on this computer. Nothing is uploaded.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<input type="file" id="file" multiple accept=".als,.mid,.midi,.mp3,.wav,.m4a,.aac,.ogg,.flac,.aif,.aiff,.json,audio/*" hidden>
+<div id="pop" hidden></div>
+<div id="menu" hidden></div>
+<div id="toast" hidden></div>
+<dialog id="sheet">
+  <h2>Lyric sheet</h2>
+  <label class="chk"><input type="checkbox" id="sheetNotes"> Show notes</label>
+  <textarea id="sheetText" readonly></textarea>
+  <div class="chips"><button id="sheetCopy" class="pri">Copy</button><button id="sheetClose">Close</button></div>
+</dialog>
+<script type="module" src="js/app.js?v=1"></script>
+</body>
+</html>
