@@ -1,5 +1,5 @@
-import { tidy, parseAls, parseMidi, analyzeAudio, midiPeaks, chordEvents, drumKind, guessRoles, pc, octave, NAMES, KIND_COLORS, KIND_LABEL, KIND_ORDER, PEAK_RATE, demoSong, demoLyrics } from './parse.js';
-import { Engine } from './audio.js';
+import { tidy, parseAls, parseMidi, analyzeAudio, midiPeaks, chordEvents, drumKind, guessRoles, pc, octave, NAMES, KIND_COLORS, KIND_LABEL, KIND_ORDER, PEAK_RATE, demoSong, demoLyrics, guessKey } from './parse.js?v=2';
+import { Engine } from './audio.js?v=2';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -60,7 +60,12 @@ function stretch(text, n) {
 
 // ---------- persistence ----------
 let saveT;
-function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem('vocanote.proj', JSON.stringify(P())); } catch (e) {} }, 250); syncGuide(); }
+const PKEY = n => 'vocanote.p:' + n;
+function writeProj() { clearTimeout(saveT); try { const j = JSON.stringify(P()); localStorage.setItem('vocanote.proj', j); if (P().name) localStorage.setItem(PKEY(P().name), j); } catch (e) {} }
+function save() { clearTimeout(saveT); saveT = setTimeout(writeProj, 250); syncGuide(); }
+function storedProj(name) { try { const raw = localStorage.getItem(PKEY(name)); return raw ? Object.assign(defProj(), JSON.parse(raw)) : null; } catch (e) { return null; } }
+// every track file is its own project: put the current one away, then pick up that file's saved lyrics or start clean
+function switchProj(name) { writeProj(); closeEdit(); const st = storedProj(name); S.proj = st || defProj(); S.proj.name = name; S.proj.demo = false; S.undo = []; S.redo = []; S.cursor = 0; engine.pos = 0; return !!st; }
 const idb = () => new Promise((res, rej) => { const r = indexedDB.open('vocanote', 1); r.onupgradeneeded = () => r.result.createObjectStore('files'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
 async function idbSet(k, v) { try { const db = await idb(); await new Promise((res, rej) => { const tx = db.transaction('files', 'readwrite'); v == null ? tx.objectStore('files').delete(k) : tx.objectStore('files').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); } catch (e) {} }
 async function idbGet(k) { try { const db = await idb(); return await new Promise((res, rej) => { const r = db.transaction('files').objectStore('files').get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); } catch (e) { return null; } }
@@ -140,7 +145,7 @@ function computeRows() {
   hard.forEach((a, hi) => {
     const b = hi + 1 < hard.length ? hard[hi + 1] : S.total;
     for (let s = a; s < b - EPS;) {
-      const e = Math.min(b, (Math.floor(s / S.bar + EPS) + p.bars) * S.bar);
+      const e = Math.min(b, p.bars >= 1 ? (Math.floor(s / S.bar + EPS) + p.bars) * S.bar : (Math.floor(s / bpr + EPS) + 1) * bpr);
       const sec = sectionAt(s);
       rows.push({ start: s, end: e, sec, secStart: !!sec && Math.abs(sec.beat - s) < 1e-3, manual: s === a && p.breaks.some(x => Math.abs(x - a) < 1e-3) });
       s = e;
@@ -239,7 +244,15 @@ function refresh() {
   $('#empty').hidden = has; el.rows.hidden = !has; $('#sticky').hidden = !has;
   $('#fname').textContent = [S.song && S.song.name, S.audio && S.audio.name].filter(Boolean).join('  +  ');
   $('#offBox').hidden = !S.audio;
+  const nd = S.song ? S.song.tracks.filter(t => !t.isDrum && t.id !== P().roles.drums) : [];
+  S.key = S.song ? guessKey(nd) : null;
+  $('#meta').hidden = !has;
+  $('#meta').innerHTML = `<span title="${S.song ? 'Worked out from the notes in the track' : 'The key is read from MIDI notes. An audio-only file has none.'}">Key <b>${S.key || '—'}</b></span><span title="Change it under Tempo in the panel"><b>${+P().bpm.toFixed(2)}</b> BPM</span>`;
+  zoomLabel();
 }
+const ZOOMS = [0.5, 1, 2, 3, 4, 6, 8];
+function zoomLabel() { const b = P().bars; $('#barsN').textContent = b === 0.5 ? '½ bar' : b === 1 ? '1 bar' : b + ' bars'; }
+function zoom(dir) { let i = ZOOMS.indexOf(P().bars); if (i < 0) i = ZOOMS.findIndex(z => z >= P().bars); i = Math.max(0, Math.min(ZOOMS.length - 1, i - dir)); if (ZOOMS[i] === P().bars) return; P().bars = ZOOMS[i]; zoomLabel(); const c = S.cursor; relayout(); const k = el.list.children[rowIdx(engine.playing ? engine.beat() : c)]; if (k) el.stage.scrollTo({ top: Math.max(0, S.rowTops[rowIdx(engine.playing ? engine.beat() : c)] - 8) }); }
 
 function renderMini() {
   el.mini.innerHTML = S.rows.map((r, i) => `<i data-i="${i}" class="${i === S.active ? 'act' : ''}${r.secStart ? ' st' : ''}" style="flex:${r.end - r.start};background:${r.sec ? r.sec.color : '#4a4860'}" title="${r.sec ? esc(r.sec.name) + ' · ' : ''}Bar ${Math.floor(r.start / S.bar + EPS) + 1}"></i>`).join('');
@@ -271,7 +284,6 @@ function drawWave() {
 function renderSide() {
   const p = P();
   $('#grid').innerHTML = LEVELS.map(l => `<button data-g="${l.k}" class="${p.grid[l.k] ? 'on' : ''}" aria-pressed="${!!p.grid[l.k]}">${l.label}</button>`).join('');
-  $('#barsN').textContent = p.bars;
   let h = '';
   if (S.song) {
     const opts = sel => `<option value="">None</option>` + S.song.tracks.filter(t => t.notes.length).map(t => `<option value="${t.id}"${t.id === sel ? ' selected' : ''}>${esc(t.name)}${t.device && !t.name.includes(t.device) ? ' · ' + esc(t.device) : ''}</option>`).join('');
@@ -313,7 +325,8 @@ function setActive(i, scroll) {
   drawWave();
   if (scroll && kids[i]) {
     const top = S.rowTops[i] + el.rows.offsetTop - $('#sticky').offsetHeight - 12, st = el.stage.scrollTop, vh = el.stage.clientHeight - $('#sticky').offsetHeight;
-    if (top < st || top + S.rowH > st + vh) el.stage.scrollTo({ top: Math.max(0, top - 20), behavior: 'smooth' });
+    const want = Math.max(0, Math.min(top + 4, el.stage.scrollHeight - el.stage.clientHeight));
+    if (Math.abs(want - st) > 6) el.stage.scrollTo({ top: want, behavior: 'smooth' });
   }
 }
 function setCursor(b, seek = true) {
@@ -576,8 +589,12 @@ el.rows.addEventListener('contextmenu', e => {
   const row = S.rows[+rowEl.dataset.i], x = e.clientX - laneLeft(), st = gridStep();
   let b = x < 0 ? row.start : Math.max(row.start, Math.min(row.end - EPS, Math.round((row.start + x / S.ppb) / st) * st));
   const nb = Math.round(b / S.bar) * S.bar; if (Math.abs(nb - b) * S.ppb < 14 && nb >= row.start - EPS && nb < row.end) b = nb;
-  setCursor(b);
-  const items = [`<div class="mh">${posLabel(b)}</div><div class="ml">Start a section here</div><div class="chips sm">` + SECTION_TYPES.map(t => `<button data-m="sec" data-n="${t.n}" style="--c:${t.c}">${t.n}</button>`).join('') + `<button data-m="sec" data-n="*">Custom…</button></div>`];
+  const tokEl = e.target.closest('.tok'), tk = tokEl && tokById(tokEl.dataset.id);
+  if (tk) b = tk.beat;
+  closeEdit(); setCursor(b);
+  const lineToks = P().tokens.filter(t => t.beat >= row.start - EPS && t.beat < row.end - EPS);
+  const del = (tk ? `<button class="mi del" data-m="del">${tk.rest ? 'Delete this silence' : 'Delete “' + esc(tk.text || '…') + '”'}</button>` : '') + (lineToks.length ? '<button class="mi del" data-m="clear">Delete every word on this line</button>' : '');
+  const items = [del, `<div class="mh">${posLabel(b)}</div><div class="ml">Start a section here</div><div class="chips sm">` + SECTION_TYPES.map(t => `<button data-m="sec" data-n="${t.n}" style="--c:${t.c}">${t.n}</button>`).join('') + `<button data-m="sec" data-n="*">Custom…</button></div>`];
   if (Math.abs(row.start - b) > 1e-3) items.push('<button class="mi" data-m="break">Push the rest onto a new line <kbd>Enter</kbd></button>');
   if (row.manual) items.push('<button class="mi" data-m="unbreak">Remove this line’s break</button>');
   const s = sectionAt(b); if (s) items.push(`<button class="mi" data-m="unsec">Remove section “${esc(s.name)}”</button>`);
@@ -588,6 +605,8 @@ el.rows.addEventListener('contextmenu', e => {
     else if (m.m === 'unbreak') removeBreak(row.start);
     else if (m.m === 'unsec') { pushUndo(); P().sections = P().sections.filter(q => q !== s); relayout(); }
     else if (m.m === 'play') engine.play(b);
+    else if (m.m === 'del') { pushUndo(); const a = P().tokens, j = a.indexOf(tk); if (j > 0 && a[j - 1].join && !tk.join) a[j - 1].join = false; removeTok(tk); relayout(); }
+    else if (m.m === 'clear') { pushUndo(); P().tokens = P().tokens.filter(t => !lineToks.includes(t)); relayout(); }
   });
 });
 
@@ -654,11 +673,13 @@ $('#play').onclick = () => engine.toggle();
 $('#loop').onclick = cycleLoop;
 $('#vol').oninput = e => engine.setVol(+e.target.value);
 $('#undo').onclick = undo;
-$('#sideBtn').onclick = () => { document.body.classList.toggle('noside'); setTimeout(relayout, 20); };
+const sideLabel = () => { const hid = document.body.classList.contains('noside') !== matchMedia('(max-width: 900px)').matches; $('#sideBtn').textContent = hid ? '☰ Show panel' : '☰ Hide panel'; };
+$('#sideBtn').onclick = () => { document.body.classList.toggle('noside'); try { localStorage.setItem('vocanote.noside', document.body.classList.contains('noside') ? '1' : ''); } catch (e) {} sideLabel(); setTimeout(relayout, 20); };
+try { if (localStorage.getItem('vocanote.noside') && !matchMedia('(max-width: 900px)').matches) document.body.classList.add('noside'); } catch (e) {}
+sideLabel(); matchMedia('(max-width: 900px)').addEventListener('change', sideLabel);
+$('#zoom').onclick = e => { const b = e.target.closest('[data-z]'); if (b) zoom(+b.dataset.z); };
 $('#grid').onclick = e => { const b = e.target.closest('[data-g]'); if (!b) return; P().grid[b.dataset.g] = !P().grid[b.dataset.g]; renderSide(); relayout(); };
 $('#side').addEventListener('click', e => {
-  const b = e.target.closest('[data-bars]');
-  if (b) { P().bars = Math.max(1, Math.min(8, P().bars + +b.dataset.bars)); $('#barsN').textContent = P().bars; relayout(); return; }
   const s = e.target.closest('[data-sec]');
   if (s) { addSection(s.dataset.sec === '*' ? { n: '*' } : SECTION_TYPES.find(t => t.n === s.dataset.sec), S.edit ? S.edit.beat : S.cursor); return; }
   const x = e.target.closest('.sec button');
@@ -743,13 +764,18 @@ async function openFile(file) {
     engine.pause();
     if (ext === 'json') { const d = JSON.parse(await file.text()); if (!Array.isArray(d.tokens)) throw new Error('That file is not a Vocanote project.'); S.proj = Object.assign(defProj(), d); toast('Project loaded. Open the track to go with it.'); }
     else if (ext === 'als' || ext === 'mid' || ext === 'midi') {
-      adoptSong(ext === 'als' ? await parseAls(file) : await parseMidi(file), false);
+      const song = ext === 'als' ? await parseAls(file) : await parseMidi(file);
+      const had = switchProj(file.name), bpm = P().bpm;
+      S.audio = null; await idbSet('audio', null);
+      adoptSong(song, had); if (had) { P().bpm = bpm; toast('Picked up your saved lyrics for this track.'); }
       if (!S.song.tracks.some(t => t.notes.length)) toast('No MIDI notes found in that file. Audio-only sets need the bounced mp3.');
       await idbSet('midi', file);
     } else {
-      const an = await loadAudio(file, true);
+      const own = !S.song || P().demo; let had = false;
+      if (own) { had = switchProj(file.name); S.song = null; await idbSet('midi', null); }
+      const an = await loadAudio(file, !had);
       await idbSet('audio', file);
-      toast(S.song ? 'Audio added. If it is off the grid, adjust “Beat 1 at” under Tempo.' : `Tempo guessed at ${an.bpm} BPM. Fix it under Tempo if the grid is off.`);
+      toast(had ? 'Picked up your saved lyrics for this track.' : S.song ? 'Audio added to this set. If it is off the grid, adjust “Beat 1 at” under Tempo.' : `Tempo guessed at ${an.bpm} BPM. Fix it under Tempo if the grid is off.`);
     }
     refresh();
   } catch (err) { console.error(err); toast(err.message || 'Could not read that file.'); }

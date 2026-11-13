@@ -9,18 +9,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=1">
+<link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
 <div id="app">
   <header id="top">
-    <button id="sideBtn" class="ib" title="Show or hide the panel" aria-label="Toggle panel">☰</button>
+    <button id="sideBtn" class="tb" title="Show or hide the side panel">☰ Hide panel</button>
     <div class="logo"><span class="lg-c"></span><span class="lg-s"></span>vocanote</div>
+    <div id="meta" hidden></div>
     <div id="fname" title=""></div>
     <div class="transport">
       <button id="play" class="pb" title="Play / pause (Space)" aria-label="Play">▶</button>
       <button id="loop" class="tb" title="Loop the line or section you are working on (L)">Loop: off</button>
       <div id="clock">Bar 1 · 0:00.00</div>
+      <span class="step zoom" id="zoom" title="Zoom: how much of the track fits on one line"><button data-z="-1" aria-label="Zoom out: more bars on a line">−</button><b id="barsN">2 bars</b><button data-z="1" aria-label="Zoom in: fewer, wider bars on a line">+</button></span>
       <input id="vol" type="range" min="0" max="1" step="0.01" value="0.8" title="Volume" aria-label="Volume">
     </div>
     <div class="actions">
@@ -35,9 +37,7 @@
     <section>
       <h3>View</h3>
       <div id="grid" class="chips"></div>
-      <label class="rowl">Bars per line
-        <span class="step"><button data-bars="-1" aria-label="Fewer bars per line">−</button><b id="barsN">2</b><button data-bars="1" aria-label="More bars per line">+</button></span>
-      </label>
+      <div class="hint">Zoom with − and + at the top.</div>
     </section>
     <section>
       <h3>Elements</h3>
@@ -106,6 +106,6 @@
   <textarea id="sheetText" readonly></textarea>
   <div class="chips"><button id="sheetCopy" class="pri">Copy</button><button id="sheetClose">Close</button></div>
 </dialog>
-<script type="module" src="js/app.js?v=1"></script>
+<script type="module" src="js/app.js?v=2"></script>
 </body>
 </html>

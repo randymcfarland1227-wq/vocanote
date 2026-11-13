@@ -337,3 +337,15 @@ export const demoLyrics = () => ({
   ],
   sections: [{ beat: 0, name: 'Verse', color: '#818cf8' }, { beat: 16, name: 'Chorus', color: '#fb7185' }],
 });
+
+// Key guess from MIDI notes (Krumhansl profiles, weighted by note length). Returns e.g. "A minor" or null.
+export function guessKey(tracks) {
+  const MAJ = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88], MIN = [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+  const h = new Array(12).fill(0); let n = 0;
+  for (const t of tracks) for (const x of t.notes) { h[((x.p % 12) + 12) % 12] += Math.max(0.1, Math.min(4, x.d || 0.25)); n++; }
+  if (n < 4) return null;
+  const corr = (prof, root) => { let mh = 0, mp = 0; for (let i = 0; i < 12; i++) { mh += h[i] / 12; mp += prof[i] / 12; } let a = 0, b = 0, c = 0; for (let i = 0; i < 12; i++) { const x = h[(i + root) % 12] - mh, y = prof[i] - mp; a += x * y; b += x * x; c += y * y; } return a / Math.sqrt(b * c || 1); };
+  let best = null;
+  for (let r = 0; r < 12; r++) for (const [prof, q] of [[MAJ, 'major'], [MIN, 'minor']]) { const v = corr(prof, r); if (!best || v > best.v) best = { v, name: NAMES[r] + ' ' + q }; }
+  return best.name;
+}
