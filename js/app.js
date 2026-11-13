@@ -1,5 +1,5 @@
-import { tidy, parseAls, parseMidi, analyzeAudio, midiPeaks, chordEvents, drumKind, guessRoles, pc, octave, NAMES, KIND_COLORS, KIND_LABEL, KIND_ORDER, PEAK_RATE, demoSong, demoLyrics, guessKey } from './parse.js?v=2';
-import { Engine } from './audio.js?v=2';
+import { tidy, parseAls, parseMidi, analyzeAudio, midiPeaks, chordEvents, drumKind, guessRoles, pc, octave, NAMES, KIND_COLORS, KIND_LABEL, KIND_ORDER, PEAK_RATE, demoSong, demoLyrics, guessKey } from './parse.js?v=3';
+import { Engine } from './audio.js?v=3';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -135,6 +135,15 @@ function computeLanes() {
   if (p.show.drums) for (const k of S.kinds) if (!p.hidden[k]) { L.push({ k, top: y, y: y + 8, h: 16 }); y += 16; }
   S.lanes = L; S.lyTop = y + 8; S.rowH = S.lyTop + LY;
 }
+// lanes for one stretch of the song: an instrument with nothing to show there gets no line
+function lanesFor(a, b) {
+  const p = P(), L = [], has = (arr, k) => arr.some(x => x.t >= a - EPS && x.t < b - EPS && (!k || x.kind === k));
+  let y = RUL;
+  if (p.show.chords && has(S.E.chords)) { L.push({ k: 'chord', top: y, y: y + 28, h: 42 }); y += 42; }
+  if (p.show.bass && has(S.E.bass)) { L.push({ k: 'bass', top: y, y: y + 13, h: 26 }); y += 26; }
+  if (p.show.drums) for (const k of S.kinds) if (!p.hidden[k] && has(S.E.drums, k)) { L.push({ k, top: y, y: y + 8, h: 16 }); y += 16; }
+  return { lanes: L, lyTop: y + 8, H: y + 8 + LY };
+}
 
 function computeRows() {
   const p = P(), bpr = S.bar * p.bars;
@@ -151,6 +160,12 @@ function computeRows() {
       s = e;
     }
   });
+  const secs = p.sections.filter(s => s.beat < S.total - EPS), cache = new Map();
+  for (const r of rows) {
+    const a = r.sec ? r.sec.beat : 0, nx = secs.find(s => s.beat > a + EPS), b = nx ? nx.beat : S.total;
+    if (!cache.has(a)) cache.set(a, lanesFor(a, b));
+    Object.assign(r, cache.get(a));
+  }
   S.rows = rows;
   S.W = Math.max(320, el.stage.clientWidth - GUT - 22);
   S.ppb = S.W / bpr;
@@ -158,10 +173,10 @@ function computeRows() {
 
 // ---------- rendering ----------
 function rowHTML(i) {
-  const r = S.rows[i], p = P(), ppb = S.ppb, w = (r.end - r.start) * ppb, H = S.rowH, X = b => (b - r.start) * ppb;
+  const r = S.rows[i], p = P(), ppb = S.ppb, w = (r.end - r.start) * ppb, H = r.H, X = b => (b - r.start) * ppb;
   let g = '';
   if (w < S.W - 1) g += `<rect class="void" x="${w}" y="0" width="${S.W - w}" height="${H}"/>`;
-  for (const ln of S.lanes) g += `<line class="lane-l" x1="0" x2="${w}" y1="${ln.y}" y2="${ln.y}" style="stroke:${color(ln.k)}"/>`;
+  for (const ln of r.lanes) g += `<line class="lane-l" x1="0" x2="${w}" y1="${ln.y}" y2="${ln.y}" style="stroke:${color(ln.k)}"/>`;
   // grid
   const active = LEVELS.filter(l => l.step && p.grid[l.k]), lines = new Map();
   for (const l of [...active].reverse()) for (let n = Math.ceil((r.start - EPS) / l.step); n * l.step < r.end - EPS; n++) lines.set(Math.round(n * l.step * 1000), l.k);
@@ -185,22 +200,22 @@ function rowHTML(i) {
   toks.forEach((t, j) => {
     const x = X(t.beat), nx = j + 1 < toks.length ? X(toks[j + 1].beat) : Math.max(S.W, x + 60);
     if (t.rest) { th += `<div class="tok rest" data-id="${t.id}" style="left:${x}px;width:${Math.max(8, t.len * ppb)}px" title="Silence"><span class="dash"></span></div>`; return; }
-    const ln = t.anchor && S.lanes.find(l => l.k === t.anchor);
-    if (ln) g += `<line class="anc" x1="${x}" x2="${x}" y1="${ln.y + 6}" y2="${S.lyTop + 8}" style="stroke:${color(t.anchor)}"/>`;
+    const ln = t.anchor && r.lanes.find(l => l.k === t.anchor);
+    if (ln) g += `<line class="anc" x1="${x}" x2="${x}" y1="${ln.y + 6}" y2="${r.lyTop + 8}" style="stroke:${color(t.anchor)}"/>`;
     const holdW = (t.len || 0) * ppb;
     let disp = t.len > 0 ? stretch(t.text, Math.floor((holdW - 4) / S.chW)) : t.text;
     if (t.join) disp += '-';
     const nat = measure(disp), avail = nx - x - 4, sc = nat > avail ? Math.max(0.5, avail / nat) : 1;
     const end = t.len > 0 ? t.beat + t.len : Math.min(t.beat + 1, j + 1 < toks.length ? toks[j + 1].beat : r.end);
-    th += `<div class="tok${ln ? ' anc' : ''}${S.edit && S.edit.id === t.id ? ' editing' : ''}" data-id="${t.id}" data-b="${t.beat}" data-e="${end}" style="left:${x}px${ln ? ';--a:' + color(t.anchor) : ''}">`
+    th += `<div class="tok${ln ? ' anc' : ''}${S.edit && S.edit.id === t.id ? ' editing' : ''}" data-id="${t.id}" data-b="${t.beat}" data-e="${end}" style="left:${x}px;min-width:${Math.max(holdW, 14)}px${ln ? ';--a:' + color(t.anchor) : ''}">`
       + `<span class="tx" style="${sc < 1 ? `transform:scaleX(${sc.toFixed(3)})` : ''}">${esc(disp)}</span>`
       + (t.len > 0 ? `<span class="hold" style="width:${holdW}px"></span>` : '')
-      + `<span class="nt${t.note == null ? ' none' : ''}" title="${t.note == null ? 'Add a note' : pc(t.note) + octave(t.note)}">${t.note == null ? '+' : pc(t.note)}</span>`
+      + `<span class="nt${t.note == null ? ' none' : ''}" title="${t.note == null ? 'Add a note' : pc(t.note) + octave(t.note)}">${t.note == null ? '+ note' : '♪ ' + pc(t.note) + octave(t.note)}</span>`
       + `<i class="grip" style="left:${Math.max(holdW, nat * sc) + 1}px" title="Drag to hold this word"></i></div>`;
   });
   // element markers
   const inRow = t => t >= r.start - EPS && t < r.end - EPS;
-  const lane = k => S.lanes.find(l => l.k === k);
+  const lane = k => r.lanes.find(l => l.k === k);
   const lc = lane('chord');
   if (lc) for (const c of S.E.chords) if (inRow(c.t)) {
     const x = X(c.t);
@@ -218,10 +233,10 @@ function rowHTML(i) {
   }
   const sc = r.sec ? r.sec.color : '#5b586e';
   const b1 = Math.floor(r.start / S.bar + EPS) + 1, b2 = Math.ceil(r.end / S.bar - EPS);
-  const tags = S.lanes.map(l => `<span class="lt" style="top:${l.y - 6}px;color:${color(l.k)}">${KIND_LABEL[l.k]}</span>`).join('');
+  const tags = r.lanes.map(l => `<span class="lt" style="top:${l.y - 6}px;color:${color(l.k)}">${KIND_LABEL[l.k]}</span>`).join('');
   return `<div class="row${i === S.active ? ' act' : ''}${r.secStart ? ' sst' : ''}" data-i="${i}" style="--sec:${sc};height:${H}px">`
-    + `<div class="gut">${r.secStart ? `<b class="sname">${esc(r.sec.name)}</b>` : r.sec ? `<span class="scont">${esc(r.sec.name)}</span>` : ''}<span class="bars">${b1 === b2 ? 'Bar ' + b1 : 'Bars ' + b1 + '–' + b2}</span>${r.manual ? `<button class="unbr" data-unbreak="${r.start}" title="Remove this line break">↵ ×</button>` : ''}${tags}<span class="lt ly" style="top:${S.lyTop + 12}px">Lyrics</span></div>`
-    + `<div class="lane" style="width:${S.W}px"><svg class="els" width="${S.W}" height="${H}">${g}</svg><div class="lyr" style="top:${S.lyTop}px;height:${LY}px">${th}</div></div></div>`;
+    + `<div class="gut">${r.secStart ? `<b class="sname">${esc(r.sec.name)}</b>` : r.sec ? `<span class="scont">${esc(r.sec.name)}</span>` : ''}<span class="bars">${b1 === b2 ? 'Bar ' + b1 : 'Bars ' + b1 + '–' + b2}</span>${r.manual ? `<button class="unbr" data-unbreak="${r.start}" title="Remove this line break">↵ ×</button>` : ''}${tags}<span class="lt ly" style="top:${r.lyTop + 12}px">Lyrics</span></div>`
+    + `<div class="lane" style="width:${S.W}px"><svg class="els" width="${S.W}" height="${H}">${g}</svg><div class="lyr" style="top:${r.lyTop}px;height:${LY}px">${th}</div></div></div>`;
 }
 function renderRow(i) { const n = el.list.children[i]; if (n) n.outerHTML = rowHTML(i); }
 function renderRows() {
@@ -348,7 +363,7 @@ function frame() {
     const b = Math.max(0, Math.min(S.total - EPS, engine.beat())), i = rowIdx(b), r = S.rows[i];
     if (engine.playing) setActive(i, true);
     el.ph.style.transform = `translate(${GUT + (b - r.start) * S.ppb}px,${S.rowTops[i] || 0}px)`;
-    el.ph.style.height = S.rowH + 'px';
+    el.ph.style.height = r.H + 'px';
     const ar = S.rows[S.active], inA = ar && b >= ar.start - EPS && b <= ar.end;
     el.wph.style.display = inA ? '' : 'none';
     if (inA) el.wph.style.transform = `translateX(${GUT + (b - ar.start) * S.ppb}px)`;
@@ -401,12 +416,16 @@ function prevStep(beat) {
 // ---------- lyric editing ----------
 function placeInput() {
   const e = S.edit, inp = el.inp;
-  if (!e) { inp.style.display = 'none'; return; }
-  const i = rowIdx(e.beat), r = S.rows[i];
+  if (!e) { inp.style.display = 'none'; $('#edbar').hidden = true; return; }
+  const i = rowIdx(e.beat), r = S.rows[i], tk = e.id && tokById(e.id);
   inp.style.display = 'block';
   inp.style.left = GUT + (e.beat - r.start) * S.ppb - 3 + 'px';
-  inp.style.top = S.rowTops[i] + S.lyTop + 5 + 'px';
-  inp.style.width = Math.max(34, measure(inp.value) + 16) + 'px';
+  inp.style.top = S.rowTops[i] + r.lyTop + 5 + 'px';
+  inp.style.width = Math.max(34, measure(inp.value) + 16, tk ? tk.len * S.ppb : 0) + 'px';
+  const bar = $('#edbar'); bar.hidden = false;
+  bar.innerHTML = tk && !tk.rest ? `<button data-eb="note">${tk.note == null ? '♪ Add note' : '♪ ' + pc(tk.note) + octave(tk.note)}</button><button data-eb="up" title="Note up (↑)">▲</button><button data-eb="dn" title="Note down (↓)">▼</button><button data-eb="shorter" title="Hold shorter (Shift ←)">⇤ hold</button><button data-eb="longer" title="Hold longer (Shift →)">hold ⇥</button><button data-eb="del" class="del">Delete</button>` : '<span>Type the word. Then pick its note and hold here.</span>';
+  bar.style.top = S.rowTops[i] + r.lyTop + 36 + 'px';
+  bar.style.left = Math.max(4, Math.min(GUT + (e.beat - r.start) * S.ppb - 3, GUT + S.W - bar.offsetWidth - 4)) + 'px';
 }
 function openEdit(beat, anchor) {
   if (!S.rows.length) return;
@@ -421,12 +440,12 @@ function openEdit(beat, anchor) {
   el.inp.focus({ preventScroll: true });
   el.inp.setSelectionRange(el.inp.value.length, el.inp.value.length);
   const i = rowIdx(beat), top = S.rowTops[i] + el.rows.offsetTop, sh = $('#sticky').offsetHeight;
-  if (top - sh < el.stage.scrollTop || top + S.rowH > el.stage.scrollTop + el.stage.clientHeight) el.stage.scrollTo({ top: Math.max(0, top - sh - 30), behavior: 'smooth' });
+  if (top - sh < el.stage.scrollTop || top + S.rows[i].H > el.stage.scrollTop + el.stage.clientHeight) el.stage.scrollTo({ top: Math.max(0, top - sh - 30), behavior: 'smooth' });
 }
 function closeEdit() {
   if (!S.edit) return;
   const i = rowIdx(S.edit.beat);
-  S.edit = null; el.inp.style.display = 'none'; el.inp.value = '';
+  S.edit = null; el.inp.style.display = 'none'; el.inp.value = ''; $('#edbar').hidden = true;
   renderRow(i);
 }
 const holdEnd = () => { const t = S.edit && tokById(S.edit.id); return t && t.len > 0 ? t.beat + t.len : 0; };
@@ -501,13 +520,13 @@ function nudgeNote(dir, oct) {
   dirty();
   t.note = t.note == null ? S.lastNote : Math.max(24, Math.min(108, t.note + dir * (oct ? 12 : 1)));
   S.lastNote = t.note; engine.blip(t.note);
-  renderRow(rowIdx(t.beat)); save();
+  renderRow(rowIdx(t.beat)); placeInput(); save();
 }
 function nudgeLen(dir) {
   const t = S.edit && tokById(S.edit.id); if (!t) return;
   dirty();
   t.len = Math.max(0, Math.round(((t.len || 0) + dir * gridStep()) * 1000) / 1000);
-  renderRow(rowIdx(t.beat)); save();
+  renderRow(rowIdx(t.beat)); placeInput(); save();
 }
 
 function addBreak(beat) {
@@ -555,7 +574,11 @@ el.rows.addEventListener('pointerdown', e => {
   const mk = e.target.closest('.mk');
   if (mk) { setCursor(+mk.dataset.t); return openEdit(+mk.dataset.t, mk.dataset.a); }
   if (x < 0) { closeEdit(); return setCursor(row.start); }
-  if (y >= S.lyTop) { const s = snap(row, x, e.altKey); setCursor(s.beat); openEdit(s.beat, s.anchor); }
+  if (y >= row.lyTop) {
+    const bx = row.start + x / S.ppb, inside = P().tokens.find(t => !t.rest && t.len > 0 && bx >= t.beat - EPS && bx < t.beat + t.len && t.beat >= row.start - EPS);
+    if (inside) { setCursor(inside.beat); return openEdit(inside.beat, inside.anchor); }
+    const s = snap(row, x, e.altKey); setCursor(s.beat); openEdit(s.beat, s.anchor);
+  }
   else { closeEdit(); el.inp.blur(); const st = gridStep(), b = row.start + x / S.ppb; setCursor(e.altKey ? b : Math.min(row.end - EPS, Math.round(b / st) * st)); }
 });
 el.rows.addEventListener('pointermove', e => {
@@ -593,7 +616,7 @@ el.rows.addEventListener('contextmenu', e => {
   if (tk) b = tk.beat;
   closeEdit(); setCursor(b);
   const lineToks = P().tokens.filter(t => t.beat >= row.start - EPS && t.beat < row.end - EPS);
-  const del = (tk ? `<button class="mi del" data-m="del">${tk.rest ? 'Delete this silence' : 'Delete “' + esc(tk.text || '…') + '”'}</button>` : '') + (lineToks.length ? '<button class="mi del" data-m="clear">Delete every word on this line</button>' : '');
+  const del = (tk && !tk.rest ? '<button class="mi" data-m="note">Set the note for this word…</button>' : '') + (tk ? `<button class="mi del" data-m="del">${tk.rest ? 'Delete this silence' : 'Delete “' + esc(tk.text || '…') + '”'}</button>` : '') + (lineToks.length ? '<button class="mi del" data-m="clear">Delete every word on this line</button>' : '');
   const items = [del, `<div class="mh">${posLabel(b)}</div><div class="ml">Start a section here</div><div class="chips sm">` + SECTION_TYPES.map(t => `<button data-m="sec" data-n="${t.n}" style="--c:${t.c}">${t.n}</button>`).join('') + `<button data-m="sec" data-n="*">Custom…</button></div>`];
   if (Math.abs(row.start - b) > 1e-3) items.push('<button class="mi" data-m="break">Push the rest onto a new line <kbd>Enter</kbd></button>');
   if (row.manual) items.push('<button class="mi" data-m="unbreak">Remove this line’s break</button>');
@@ -605,6 +628,7 @@ el.rows.addEventListener('contextmenu', e => {
     else if (m.m === 'unbreak') removeBreak(row.start);
     else if (m.m === 'unsec') { pushUndo(); P().sections = P().sections.filter(q => q !== s); relayout(); }
     else if (m.m === 'play') engine.play(b);
+    else if (m.m === 'note') noteFor(tk);
     else if (m.m === 'del') { pushUndo(); const a = P().tokens, j = a.indexOf(tk); if (j > 0 && a[j - 1].join && !tk.join) a[j - 1].join = false; removeTok(tk); relayout(); }
     else if (m.m === 'clear') { pushUndo(); P().tokens = P().tokens.filter(t => !lineToks.includes(t)); relayout(); }
   });
@@ -615,6 +639,16 @@ function showMenu(html, x, y, cb) {
   m.style.left = Math.min(x, innerWidth - m.offsetWidth - 8) + 'px'; m.style.top = Math.min(y, innerHeight - m.offsetHeight - 8) + 'px';
   m.onclick = e => { const b = e.target.closest('[data-m]'); if (!b) return; m.hidden = true; cb(b.dataset); };
 }
+function noteFor(t) { closeEdit(); const n = el.list.querySelector(`.tok[data-id="${t.id}"] .nt`); if (n) openNotes(t, n); }
+$('#edbar').addEventListener('pointerdown', e => e.preventDefault());
+$('#edbar').addEventListener('click', e => {
+  const b = e.target.closest('[data-eb]'), t = S.edit && tokById(S.edit.id); if (!b || !t) return;
+  const k = b.dataset.eb;
+  if (k === 'note') return noteFor(t);
+  if (k === 'del') { pushUndo(); closeEdit(); const a = P().tokens, j = a.indexOf(t); if (j > 0 && a[j - 1].join && !t.join) a[j - 1].join = false; removeTok(t); return relayout(); }
+  if (k === 'up' || k === 'dn') nudgeNote(k === 'up' ? 1 : -1, false); else nudgeLen(k === 'longer' ? 1 : -1);
+  placeInput();
+});
 function openNotes(t, target) {
   const p = el.pop, draw = () => {
     const cur = t.note, oc = cur == null ? octave(S.lastNote) : octave(cur);

@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=2">
+<link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
 <div id="app">
@@ -74,6 +74,7 @@
         <li><kbd>⌫</kbd> on an empty spot goes back</li>
         <li><kbd>⌘Enter</kbd> play / pause while typing</li>
         <li><kbd>⌥</kbd> drag = free placement</li>
+        <li>Right-click a word: note, delete</li>
         <li>Right-click a line for sections</li>
       </ul>
     </details>
@@ -84,7 +85,7 @@
       <div id="wavewrap"><div id="wlab">Waveform</div><canvas id="wave"></canvas><div id="wph"></div></div>
       <div id="mini"></div>
     </div>
-    <div id="rows"><div id="rowlist"></div><div id="ph"></div><input id="lyin" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Lyric"></div>
+    <div id="rows"><div id="rowlist"></div><div id="ph"></div><div id="edbar" hidden></div><input id="lyin" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Lyric"></div>
     <div id="empty">
       <div class="drop">
         <div class="big">Drop your track here</div>
@@ -106,6 +107,6 @@
   <textarea id="sheetText" readonly></textarea>
   <div class="chips"><button id="sheetCopy" class="pri">Copy</button><button id="sheetClose">Close</button></div>
 </dialog>
-<script type="module" src="js/app.js?v=2"></script>
+<script type="module" src="js/app.js?v=3"></script>
 </body>
 </html>
