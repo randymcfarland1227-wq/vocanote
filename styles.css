@@ -163,6 +163,9 @@ dialog h2 { margin: 0 0 10px; }
 .step.zoom { display: inline-flex; align-items: center; } .step.zoom b { min-width: 52px; font-size: 12px; }
 .mi.del { color: #ff7a8a; }
 
+@media (max-width: 1320px) { #fname { display: none; } }
+@media (max-width: 1120px) { #vol, #undo { display: none; } #clock { min-width: 0; } #top { gap: 8px; } }
+
 @media (max-width: 900px) {
   #app { grid-template-columns: 0 1fr; }
   #side { position: fixed; top: 54px; bottom: 0; left: 0; width: 280px; z-index: 40; display: none; }

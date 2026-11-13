@@ -9,13 +9,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=3">
+<link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
 <div id="app">
   <header id="top">
     <button id="sideBtn" class="tb" title="Show or hide the side panel">☰ Hide panel</button>
     <div class="logo"><span class="lg-c"></span><span class="lg-s"></span>vocanote</div>
+    <button id="fileBtn" class="tb pri" title="New, open and save">File ▾</button>
     <div id="meta" hidden></div>
     <div id="fname" title=""></div>
     <div class="transport">
@@ -28,8 +29,6 @@
     <div class="actions">
       <button id="undo" class="tb" title="Undo (⌘Z)">Undo</button>
       <button id="sheetBtn" class="tb" title="See the lyrics as plain text">Lyric sheet</button>
-      <button id="openBtn" class="tb pri">Open file</button>
-      <button id="moreBtn" class="ib" title="More" aria-label="More">⋯</button>
     </div>
   </header>
 
@@ -107,6 +106,6 @@
   <textarea id="sheetText" readonly></textarea>
   <div class="chips"><button id="sheetCopy" class="pri">Copy</button><button id="sheetClose">Close</button></div>
 </dialog>
-<script type="module" src="js/app.js?v=3"></script>
+<script type="module" src="js/app.js?v=4"></script>
 </body>
 </html>

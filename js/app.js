@@ -1,5 +1,5 @@
-import { tidy, parseAls, parseMidi, analyzeAudio, midiPeaks, chordEvents, drumKind, guessRoles, pc, octave, NAMES, KIND_COLORS, KIND_LABEL, KIND_ORDER, PEAK_RATE, demoSong, demoLyrics, guessKey } from './parse.js?v=3';
-import { Engine } from './audio.js?v=3';
+import { tidy, parseAls, parseMidi, analyzeAudio, midiPeaks, chordEvents, drumKind, guessRoles, pc, octave, NAMES, KIND_COLORS, KIND_LABEL, KIND_ORDER, PEAK_RATE, demoSong, demoLyrics, guessKey } from './parse.js?v=4';
+import { Engine } from './audio.js?v=4';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -758,18 +758,18 @@ $('#sheetNotes').onchange = e => $('#sheetText').value = sheetText(e.target.chec
 $('#sheetClose').onclick = () => $('#sheet').close();
 $('#sheetCopy').onclick = async () => { try { await navigator.clipboard.writeText($('#sheetText').value); toast('Copied.'); } catch (e) { $('#sheetText').select(); } };
 
-$('#moreBtn').onclick = e => {
+$('#fileBtn').onclick = e => {
   const r = e.target.getBoundingClientRect();
-  showMenu('<button class="mi" data-m="export">Save project to a file</button><button class="mi" data-m="import">Open a saved project</button><button class="mi" data-m="demo">Load the demo</button><button class="mi" data-m="new">New project (clear everything)</button>', r.right - 230, r.bottom + 6, async m => {
-    if (m.m === 'export') { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(P(), null, 1)], { type: 'application/json' })); a.download = ((S.song && S.song.name) || (S.audio && S.audio.name) || 'lyrics') + '.vocanote.json'; a.click(); }
+  showMenu('<button class="mi" data-m="new">New (start empty)</button><button class="mi" data-m="import">Open a track or saved project…</button><button class="mi" data-m="export">Save to a file…</button><button class="mi" data-m="demo">Load the demo</button><div class="ml">Your lyrics also save on their own in this browser, per track.</div>', r.left, r.bottom + 6, async m => {
+    if (m.m === 'export') { if (!(S.song || S.audio) && !P().tokens.length) return toast('Nothing to save yet. Open a track first.'); writeProj(); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(P(), null, 1)], { type: 'application/json' })); a.download = ((S.song && S.song.name) || (S.audio && S.audio.name) || 'lyrics') + '.vocanote.json'; a.click(); toast('Saved to your Downloads folder. Open it later with File › Open, then open the track.'); }
     else if (m.m === 'import') $('#file').click();
     else if (m.m === 'demo') { if (!P().tokens.length || confirm('Replace what is here with the demo?')) loadDemo(); }
-    else if (m.m === 'new' && confirm('Clear the track and all lyrics?')) { engine.pause(); S.song = null; S.audio = null; S.proj = defProj(); S.cursor = 0; S.undo = []; await idbSet('midi', null); await idbSet('audio', null); refresh(); }
+    else if (m.m === 'new' && (!(S.song || S.audio) || confirm('Start an empty project? Lyrics for the current track stay saved in this browser and come back when you reopen that track.'))) { engine.pause(); writeProj(); closeEdit(); S.song = null; S.audio = null; S.proj = defProj(); S.cursor = 0; S.undo = []; await idbSet('midi', null); await idbSet('audio', null); refresh(); }
   });
 };
 
 // ---------- files ----------
-$('#openBtn').onclick = $('#pick').onclick = () => $('#file').click();
+$('#pick').onclick = () => $('#file').click();
 $('#file').onchange = async e => { for (const f of e.target.files) await openFile(f); e.target.value = ''; };
 $('#demo').onclick = () => loadDemo();
 addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dragging'); });
