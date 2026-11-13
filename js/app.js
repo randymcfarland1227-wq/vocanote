@@ -1,5 +1,5 @@
-import { tidy, parseAls, parseMidi, analyzeAudio, midiPeaks, chordEvents, drumKind, guessRoles, pc, octave, NAMES, KIND_COLORS, KIND_LABEL, KIND_ORDER, PEAK_RATE, demoSong, demoLyrics, guessKey } from './parse.js?v=4';
-import { Engine } from './audio.js?v=4';
+import { tidy, parseAls, parseMidi, analyzeAudio, midiPeaks, chordEvents, drumKind, guessRoles, pc, octave, NAMES, KIND_COLORS, KIND_LABEL, KIND_ORDER, PEAK_RATE, demoSong, demoLyrics, guessKey } from './parse.js?v=5';
+import { Engine } from './audio.js?v=5';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -847,3 +847,4 @@ async function boot() {
   requestAnimationFrame(frame);
 }
 boot();
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
